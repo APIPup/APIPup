@@ -1,0 +1,19 @@
+{
+  "app.title": "APIPup",
+  "sidebar.title": "Requests",
+  "sidebar.new_request": "New Request",
+  "sidebar.delete": "Delete",
+  "request.url_placeholder": "Enter URL",
+  "request.send": "Send",
+  "request.tab.params": "Params",
+  "request.tab.headers": "Headers",
+  "request.tab.body": "Body",
+  "request.key": "Key",
+  "request.value": "Value",
+  "request.body_placeholder": "Request body...",
+  "response.title": "Response",
+  "response.tab.body": "Body",
+  "response.tab.headers": "Headers",
+  "response.empty": "Send a request to see the response",
+  "response.error": "Error"
+}

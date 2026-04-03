@@ -1,0 +1,19 @@
+{
+  "app.title": "APIPup",
+  "sidebar.title": "请求列表",
+  "sidebar.new_request": "新建请求",
+  "sidebar.delete": "删除",
+  "request.url_placeholder": "输入 URL",
+  "request.send": "发送",
+  "request.tab.params": "参数",
+  "request.tab.headers": "请求头",
+  "request.tab.body": "请求体",
+  "request.key": "键",
+  "request.value": "值",
+  "request.body_placeholder": "请求体内容...",
+  "response.title": "响应",
+  "response.tab.body": "响应体",
+  "response.tab.headers": "响应头",
+  "response.empty": "发送请求以查看响应",
+  "response.error": "错误"
+}
