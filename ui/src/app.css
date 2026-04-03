@@ -11,4 +11,13 @@
 
 html, body {
   @apply h-full m-0 p-0 bg-surface font-sans text-sm text-gray-800;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+input, textarea, pre, code, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
