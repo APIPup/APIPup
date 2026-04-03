@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+target/
+.DS_Store
+*.swp
+*.swo
+.env
+.env.*
+# Tauri build
+tauri/target/
+ui/build/
+ui/.svelte-kit/
