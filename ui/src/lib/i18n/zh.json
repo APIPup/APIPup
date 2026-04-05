@@ -11,6 +11,8 @@
   "request.key": "键",
   "request.value": "值",
   "request.body_placeholder": "请求体内容...",
+  "request.autosave_saving": "自动保存中...",
+  "request.autosave_error": "自动保存失败",
   "response.title": "响应",
   "response.tab.body": "响应体",
   "response.tab.headers": "响应头",

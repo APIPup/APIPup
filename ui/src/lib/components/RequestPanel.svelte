@@ -1,25 +1,176 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
+
   import { t } from '$lib/i18n';
+  import { saveOperation } from '$lib/api/spec';
   import TabBar from './TabBar.svelte';
   import KeyValueEditor from './KeyValueEditor.svelte';
   import {
     activeRequest,
-    updateRequest,
+    updateActiveRequest,
     loading,
     response,
     responseError
   } from '$lib/stores/requests';
+  import { updateSpecEndpoint } from '$lib/stores/project';
   import { sendRequest } from '$lib/api/http';
 
   const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+  const AUTO_SAVE_DEBOUNCE_MS = 300;
 
   let activeTab = $state('params');
+  let autoSaving = $state(false);
+  let autoSaveError = $state<string | null>(null);
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let saveVersion = 0;
 
   const tabs = $derived([
     { key: 'params', label: $t('request.tab.params') },
     { key: 'headers', label: $t('request.tab.headers') },
     { key: 'body', label: $t('request.tab.body') }
   ]);
+
+  function buildOperationFromRequest(request: {
+    operation: Record<string, unknown>;
+    headers: Array<{ key: string; value: string; enabled: boolean }>;
+    body: string;
+  }): Record<string, unknown> {
+    const operation: Record<string, unknown> = { ...request.operation };
+
+    const originalParameters = Array.isArray(operation.parameters)
+      ? operation.parameters.filter((value) => {
+          if (!value || typeof value !== 'object') {
+            return false;
+          }
+
+          const parameter = value as Record<string, unknown>;
+          return parameter.in !== 'header';
+        })
+      : [];
+
+    const headerParameters = request.headers
+      .filter((item) => item.enabled && item.key.trim().length > 0)
+      .map((item) => ({
+        name: item.key,
+        in: 'header',
+        required: false,
+        schema: {
+          type: 'string'
+        },
+        example: item.value
+      }));
+
+    operation.parameters = [...originalParameters, ...headerParameters];
+
+    if (request.body.trim().length === 0) {
+      delete operation.requestBody;
+      return operation;
+    }
+
+    let bodyExample: unknown = request.body;
+    try {
+      bodyExample = JSON.parse(request.body);
+    } catch {
+      bodyExample = request.body;
+    }
+
+    operation.requestBody = {
+      content: {
+        'application/json': {
+          example: bodyExample
+        }
+      }
+    };
+
+    return operation;
+  }
+
+  function applyRequestUpdate(updates: {
+    method?: string;
+    url?: string;
+    headers?: Array<{ key: string; value: string; enabled: boolean }>;
+    body?: string;
+  }): void {
+    const current = $activeRequest;
+    if (!current) {
+      return;
+    }
+
+    const nextMethod = updates.method ?? current.method;
+    const nextUrl = updates.url ?? current.url;
+    const nextHeaders = updates.headers ?? current.headers;
+    const nextBody = updates.body ?? current.body;
+
+    const nextOperation = buildOperationFromRequest({
+      operation: current.operation,
+      headers: nextHeaders,
+      body: nextBody
+    });
+
+    updateSpecEndpoint(
+      current.file,
+      current.path,
+      current.method,
+      nextUrl,
+      nextMethod,
+      nextOperation
+    );
+
+    updateActiveRequest({
+      method: nextMethod,
+      url: nextUrl,
+      path: nextUrl,
+      headers: nextHeaders,
+      body: nextBody,
+      operation: nextOperation
+    });
+
+    scheduleAutoSave(current.file, nextUrl, nextMethod, nextOperation);
+  }
+
+  function scheduleAutoSave(
+    file: string,
+    path: string,
+    method: string,
+    operation: Record<string, unknown>
+  ): void {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
+
+    autoSaveError = null;
+    const nextVersion = saveVersion + 1;
+    saveVersion = nextVersion;
+
+    saveTimer = setTimeout(async () => {
+      autoSaving = true;
+
+      try {
+        await saveOperation({
+          file,
+          path,
+          method,
+          operation
+        });
+
+        if (saveVersion !== nextVersion) {
+          return;
+        }
+
+        autoSaveError = null;
+      } catch (err) {
+        if (saveVersion !== nextVersion) {
+          return;
+        }
+
+        autoSaveError = String(err);
+      } finally {
+        if (saveVersion === nextVersion) {
+          autoSaving = false;
+        }
+      }
+    }, AUTO_SAVE_DEBOUNCE_MS);
+  }
 
   async function handleSend() {
     const req = $activeRequest;
@@ -53,11 +204,11 @@
   }
 
   function handleMethodChange(method: string) {
-    if ($activeRequest) updateRequest($activeRequest.id, { method });
+    applyRequestUpdate({ method });
   }
 
   function handleUrlChange(url: string) {
-    if ($activeRequest) updateRequest($activeRequest.id, { url });
+    applyRequestUpdate({ url });
   }
 
   function handleUrlKeydown(e: KeyboardEvent) {
@@ -65,12 +216,18 @@
   }
 
   function handleHeadersUpdate(pairs: Array<{ key: string; value: string; enabled: boolean }>) {
-    if ($activeRequest) updateRequest($activeRequest.id, { headers: pairs });
+    applyRequestUpdate({ headers: pairs });
   }
 
   function handleBodyChange(body: string) {
-    if ($activeRequest) updateRequest($activeRequest.id, { body });
+    applyRequestUpdate({ body });
   }
+
+  onDestroy(() => {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
+  });
 </script>
 
 {#if $activeRequest}
@@ -102,6 +259,14 @@
     >
       {$loading ? '...' : $t('request.send')}
     </button>
+
+    {#if autoSaving}
+      <span class="text-[11px] text-gray-500">{$t('request.autosave_saving')}</span>
+    {:else if autoSaveError}
+      <span class="text-[11px] text-red-600 truncate" title={autoSaveError}>
+        {$t('request.autosave_error')}
+      </span>
+    {/if}
   </div>
 
   <!-- Tabs -->

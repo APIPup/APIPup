@@ -11,6 +11,8 @@
   "request.key": "Key",
   "request.value": "Value",
   "request.body_placeholder": "Request body...",
+  "request.autosave_saving": "Auto-saving...",
+  "request.autosave_error": "Auto-save failed",
   "response.title": "Response",
   "response.tab.body": "Body",
   "response.tab.headers": "Headers",

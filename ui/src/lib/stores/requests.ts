@@ -1,72 +1,112 @@
-import { writable, derived } from 'svelte/store';
+import { writable } from 'svelte/store';
 import type { HttpResponse } from '$lib/api/http';
 
 export interface RequestItem {
-  id: string;
+  file: string;
+  path: string;
   method: string;
   url: string;
   headers: Array<{ key: string; value: string; enabled: boolean }>;
   body: string;
+  operation: Record<string, unknown>;
 }
 
-function createId(): string {
-  return crypto.randomUUID();
+function readHeaderPairs(operation: Record<string, unknown>): Array<{ key: string; value: string; enabled: boolean }> {
+  const parametersValue = operation.parameters;
+  if (!Array.isArray(parametersValue)) {
+    return [{ key: '', value: '', enabled: true }];
+  }
+
+  const headers = parametersValue
+    .filter((value) => {
+      if (!value || typeof value !== 'object') {
+        return false;
+      }
+
+      const parameter = value as Record<string, unknown>;
+      return parameter.in === 'header' && typeof parameter.name === 'string';
+    })
+    .map((value) => {
+      const parameter = value as Record<string, unknown>;
+      return {
+        key: String(parameter.name),
+        value: '',
+        enabled: true
+      };
+    });
+
+  return headers.length > 0 ? headers : [{ key: '', value: '', enabled: true }];
 }
 
-function createDefaultRequest(): RequestItem {
+function readBody(operation: Record<string, unknown>): string {
+  const requestBodyValue = operation.requestBody;
+  if (!requestBodyValue || typeof requestBodyValue !== 'object') {
+    return '';
+  }
+
+  const requestBody = requestBodyValue as Record<string, unknown>;
+  const contentValue = requestBody.content;
+  if (!contentValue || typeof contentValue !== 'object') {
+    return '';
+  }
+
+  const content = contentValue as Record<string, unknown>;
+  const jsonContent = content['application/json'];
+  if (!jsonContent || typeof jsonContent !== 'object') {
+    return '';
+  }
+
+  const jsonBody = jsonContent as Record<string, unknown>;
+  const example = jsonBody.example;
+
+  if (typeof example === 'string') {
+    return example;
+  }
+
+  if (example && typeof example === 'object') {
+    return JSON.stringify(example, null, 2);
+  }
+
+  return '';
+}
+
+export function createRequestFromEndpoint(
+  file: string,
+  path: string,
+  method: string,
+  operation: Record<string, unknown>
+): RequestItem {
   return {
-    id: createId(),
-    method: 'GET',
-    url: '',
-    headers: [{ key: '', value: '', enabled: true }],
-    body: ''
+    file,
+    path,
+    method,
+    url: path,
+    headers: readHeaderPairs(operation),
+    body: readBody(operation),
+    operation
   };
 }
 
-export const requestList = writable<RequestItem[]>([createDefaultRequest()]);
-export const activeRequestId = writable<string>('');
+export const activeRequest = writable<RequestItem | null>(null);
 export const response = writable<HttpResponse | null>(null);
 export const responseError = writable<string | null>(null);
 export const loading = writable(false);
 
-// Initialize activeRequestId to the first request
-requestList.subscribe((list) => {
-  if (list.length > 0) {
-    activeRequestId.update((current) => {
-      if (!current || !list.find((r) => r.id === current)) {
-        return list[0].id;
-      }
-      return current;
-    });
-  }
-});
-
-export const activeRequest = derived(
-  [requestList, activeRequestId],
-  ([$list, $id]) => $list.find((r) => r.id === $id) ?? null
-);
-
-export function addRequest() {
-  const newReq = createDefaultRequest();
-  requestList.update((list) => [...list, newReq]);
-  activeRequestId.set(newReq.id);
-}
-
-export function removeRequest(id: string) {
-  requestList.update((list) => {
-    const filtered = list.filter((r) => r.id !== id);
-    return filtered.length === 0 ? [createDefaultRequest()] : filtered;
-  });
-}
-
-export function updateRequest(id: string, updates: Partial<RequestItem>) {
-  requestList.update((list) =>
-    list.map((r) => (r.id === id ? { ...r, ...updates } : r))
-  );
-}
-
-export function selectRequest(id: string) {
-  activeRequestId.set(id);
+export function selectRequest(request: RequestItem): void {
+  activeRequest.set(request);
   response.set(null);
   responseError.set(null);
+}
+
+export function updateActiveRequest(updates: Partial<RequestItem>): void {
+  activeRequest.update((current) => {
+    if (!current) {
+      return current;
+    }
+
+    return {
+      ...current,
+      ...updates
+    };
+  });
 }
