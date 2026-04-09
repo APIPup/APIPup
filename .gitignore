@@ -11,3 +11,5 @@ target/
 tauri/target/
 ui/build/
 ui/.svelte-kit/
+docs/superpowers
+.superpowers
