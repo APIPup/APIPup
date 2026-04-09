@@ -10,7 +10,8 @@
     updateActiveRequest,
     loading,
     response,
-    responseError
+    responseError,
+    type EditablePair
   } from '$lib/stores/requests';
   import { updateSpecEndpoint } from '$lib/stores/project';
   import { sendRequest } from '$lib/api/http';
@@ -30,9 +31,50 @@
     { key: 'body', label: $t('request.tab.body') }
   ]);
 
+  const responseItems = $derived.by(() => {
+    const operation = $activeRequest?.operation;
+    if (!operation) {
+      return [] as Array<{ status: string; description: string }>;
+    }
+
+    const responsesValue = operation.responses;
+    if (!responsesValue || typeof responsesValue !== 'object') {
+      return [] as Array<{ status: string; description: string }>;
+    }
+
+    return Object.entries(responsesValue as Record<string, unknown>).map(([status, responseValue]) => {
+      const description =
+        responseValue && typeof responseValue === 'object' && typeof (responseValue as Record<string, unknown>).description === 'string'
+          ? ((responseValue as Record<string, unknown>).description as string)
+          : '';
+
+      return {
+        status,
+        description
+      };
+    });
+  });
+
+  function buildParameters(pairs: EditablePair[], location: string): Record<string, unknown>[] {
+    return pairs
+      .filter((item) => item.enabled && item.key.trim().length > 0)
+      .map((item) => ({
+        name: item.key,
+        in: location,
+        required: location === 'path',
+        schema: {
+          type: 'string'
+        },
+        example: item.value
+      }));
+  }
+
   function buildOperationFromRequest(request: {
     operation: Record<string, unknown>;
-    headers: Array<{ key: string; value: string; enabled: boolean }>;
+    queryParams: EditablePair[];
+    pathParams: EditablePair[];
+    cookieParams: EditablePair[];
+    headers: EditablePair[];
     body: string;
   }): Record<string, unknown> {
     const operation: Record<string, unknown> = { ...request.operation };
@@ -44,23 +86,23 @@
           }
 
           const parameter = value as Record<string, unknown>;
-          return parameter.in !== 'header';
+          return !['query', 'path', 'cookie', 'header'].includes(String(parameter.in ?? ''));
         })
       : [];
 
-    const headerParameters = request.headers
-      .filter((item) => item.enabled && item.key.trim().length > 0)
-      .map((item) => ({
-        name: item.key,
-        in: 'header',
-        required: false,
-        schema: {
-          type: 'string'
-        },
-        example: item.value
-      }));
+    const allParameters = [
+      ...buildParameters(request.queryParams, 'query'),
+      ...buildParameters(request.pathParams, 'path'),
+      ...buildParameters(request.cookieParams, 'cookie'),
+      ...buildParameters(request.headers, 'header')
+    ];
 
-    operation.parameters = [...originalParameters, ...headerParameters];
+    const mergedParameters = [...originalParameters, ...allParameters];
+    if (mergedParameters.length > 0) {
+      operation.parameters = mergedParameters;
+    } else {
+      delete operation.parameters;
+    }
 
     if (request.body.trim().length === 0) {
       delete operation.requestBody;
@@ -88,7 +130,10 @@
   function applyRequestUpdate(updates: {
     method?: string;
     url?: string;
-    headers?: Array<{ key: string; value: string; enabled: boolean }>;
+    queryParams?: EditablePair[];
+    pathParams?: EditablePair[];
+    cookieParams?: EditablePair[];
+    headers?: EditablePair[];
     body?: string;
   }): void {
     const current = $activeRequest;
@@ -98,11 +143,17 @@
 
     const nextMethod = updates.method ?? current.method;
     const nextUrl = updates.url ?? current.url;
+    const nextQueryParams = updates.queryParams ?? current.queryParams;
+    const nextPathParams = updates.pathParams ?? current.pathParams;
+    const nextCookieParams = updates.cookieParams ?? current.cookieParams;
     const nextHeaders = updates.headers ?? current.headers;
     const nextBody = updates.body ?? current.body;
 
     const nextOperation = buildOperationFromRequest({
       operation: current.operation,
+      queryParams: nextQueryParams,
+      pathParams: nextPathParams,
+      cookieParams: nextCookieParams,
       headers: nextHeaders,
       body: nextBody
     });
@@ -120,6 +171,9 @@
       method: nextMethod,
       url: nextUrl,
       path: nextUrl,
+      queryParams: nextQueryParams,
+      pathParams: nextPathParams,
+      cookieParams: nextCookieParams,
       headers: nextHeaders,
       body: nextBody,
       operation: nextOperation
@@ -215,7 +269,19 @@
     if (e.key === 'Enter') handleSend();
   }
 
-  function handleHeadersUpdate(pairs: Array<{ key: string; value: string; enabled: boolean }>) {
+  function handleQueryParamsUpdate(pairs: EditablePair[]) {
+    applyRequestUpdate({ queryParams: pairs });
+  }
+
+  function handlePathParamsUpdate(pairs: EditablePair[]) {
+    applyRequestUpdate({ pathParams: pairs });
+  }
+
+  function handleCookieParamsUpdate(pairs: EditablePair[]) {
+    applyRequestUpdate({ cookieParams: pairs });
+  }
+
+  function handleHeadersUpdate(pairs: EditablePair[]) {
     applyRequestUpdate({ headers: pairs });
   }
 
@@ -269,16 +335,58 @@
     {/if}
   </div>
 
+  <div class="px-3 py-2 border-b border-border bg-surface-dark/40 space-y-1">
+    {#if typeof $activeRequest.operation.summary === 'string' && $activeRequest.operation.summary.trim().length > 0}
+      <div class="text-xs text-gray-700">
+        <span class="font-semibold">{$t('request.detail.summary')}: </span>
+        <span>{$activeRequest.operation.summary}</span>
+      </div>
+    {/if}
+
+    {#if typeof $activeRequest.operation.description === 'string' && $activeRequest.operation.description.trim().length > 0}
+      <div class="text-xs text-gray-600 whitespace-pre-wrap">
+        <span class="font-semibold">{$t('request.detail.description')}: </span>
+        <span>{$activeRequest.operation.description}</span>
+      </div>
+    {/if}
+
+    {#if responseItems.length > 0}
+      <div class="pt-1">
+        <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{$t('request.detail.responses')}</div>
+        <div class="mt-1 space-y-1">
+          {#each responseItems as item}
+            <div class="text-xs text-gray-600 flex items-start gap-2">
+              <span class="font-mono text-gray-700 min-w-9">{item.status}</span>
+              <span class="truncate">{item.description || '-'}</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+  </div>
+
   <!-- Tabs -->
   <TabBar {tabs} active={activeTab} onSelect={(key) => (activeTab = key)} />
 
   <!-- Tab content -->
   <div class="flex-1 overflow-auto p-3">
     {#if activeTab === 'params'}
-      <KeyValueEditor
-        pairs={$activeRequest.headers}
-        onUpdate={handleHeadersUpdate}
-      />
+      <div class="space-y-4">
+        <div>
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">{$t('request.params.query')}</div>
+          <KeyValueEditor pairs={$activeRequest.queryParams} onUpdate={handleQueryParamsUpdate} />
+        </div>
+
+        <div>
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">{$t('request.params.path')}</div>
+          <KeyValueEditor pairs={$activeRequest.pathParams} onUpdate={handlePathParamsUpdate} />
+        </div>
+
+        <div>
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">{$t('request.params.cookie')}</div>
+          <KeyValueEditor pairs={$activeRequest.cookieParams} onUpdate={handleCookieParamsUpdate} />
+        </div>
+      </div>
     {:else if activeTab === 'headers'}
       <KeyValueEditor
         pairs={$activeRequest.headers}
