@@ -1,5 +1,7 @@
 # APIPup
 
+**Readme in other languages:** [English](README.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md)
+
 A high-performance, cross-platform API testing tool with native desktop performance.
 
 Built with **Tauri** + **Rust** + **SvelteKit** for a fast, lightweight, and responsive experience.
@@ -25,7 +27,7 @@ Supports **macOS** and **Windows**.
 
 - Send HTTP requests (GET, POST, PUT, DELETE, etc.)
 - View response headers and body
-- Built-in English and Chinese support
+- Built-in support for English, Chinese, Japanese, French, and German
 - Fast and lightweight
 
 ## For Developers
