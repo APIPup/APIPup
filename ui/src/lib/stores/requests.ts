@@ -1,41 +1,58 @@
 import { writable } from 'svelte/store';
 import type { HttpResponse } from '$lib/api/http';
 
+export interface EditablePair {
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
 export interface RequestItem {
   file: string;
   path: string;
   method: string;
   url: string;
-  headers: Array<{ key: string; value: string; enabled: boolean }>;
+  queryParams: EditablePair[];
+  pathParams: EditablePair[];
+  cookieParams: EditablePair[];
+  headers: EditablePair[];
   body: string;
   operation: Record<string, unknown>;
 }
 
-function readHeaderPairs(operation: Record<string, unknown>): Array<{ key: string; value: string; enabled: boolean }> {
+function readParameterPairs(operation: Record<string, unknown>, location: string): EditablePair[] {
   const parametersValue = operation.parameters;
   if (!Array.isArray(parametersValue)) {
     return [{ key: '', value: '', enabled: true }];
   }
 
-  const headers = parametersValue
+  const pairs = parametersValue
     .filter((value) => {
       if (!value || typeof value !== 'object') {
         return false;
       }
 
       const parameter = value as Record<string, unknown>;
-      return parameter.in === 'header' && typeof parameter.name === 'string';
+      return parameter.in === location && typeof parameter.name === 'string';
     })
     .map((value) => {
       const parameter = value as Record<string, unknown>;
+
+      const exampleValue = parameter.example;
+      const pairValue = typeof exampleValue === 'string'
+        ? exampleValue
+        : exampleValue != null
+          ? JSON.stringify(exampleValue)
+          : '';
+
       return {
         key: String(parameter.name),
-        value: '',
+        value: pairValue,
         enabled: true
       };
     });
 
-  return headers.length > 0 ? headers : [{ key: '', value: '', enabled: true }];
+  return pairs.length > 0 ? pairs : [{ key: '', value: '', enabled: true }];
 }
 
 function readBody(operation: Record<string, unknown>): string {
@@ -81,7 +98,10 @@ export function createRequestFromEndpoint(
     path,
     method,
     url: path,
-    headers: readHeaderPairs(operation),
+    queryParams: readParameterPairs(operation, 'query'),
+    pathParams: readParameterPairs(operation, 'path'),
+    cookieParams: readParameterPairs(operation, 'cookie'),
+    headers: readParameterPairs(operation, 'header'),
     body: readBody(operation),
     operation
   };
