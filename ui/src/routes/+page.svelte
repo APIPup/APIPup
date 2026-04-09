@@ -110,7 +110,7 @@
 </script>
 
 <div class="h-screen overflow-hidden flex flex-col">
-  <div class="px-4 py-3 border-b border-border bg-surface-dark flex items-center gap-3">
+  <div class="pl-[80px] pr-4 py-2 border-b border-border bg-surface-dark flex items-center gap-3">
     <input
       type="text"
       value={projectPath}
