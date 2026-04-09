@@ -32,6 +32,83 @@
     return `${endpoint.file}::${endpoint.method}::${endpoint.path}`;
   }
 
+  function resolveParameterRef(spec: OpenApiSpec, parameterLike: unknown): Record<string, unknown> | null {
+    if (!parameterLike || typeof parameterLike !== 'object') {
+      return null;
+    }
+
+    const parameter = parameterLike as Record<string, unknown>;
+    const refValue = parameter.$ref;
+    if (typeof refValue !== 'string' || !refValue.startsWith('#/components/parameters/')) {
+      return parameter;
+    }
+
+    const refName = refValue.slice('#/components/parameters/'.length);
+    if (!refName) {
+      return null;
+    }
+
+    const componentsValue = spec.components;
+    if (!componentsValue || typeof componentsValue !== 'object') {
+      return null;
+    }
+
+    const parametersValue = (componentsValue as Record<string, unknown>).parameters;
+    if (!parametersValue || typeof parametersValue !== 'object') {
+      return null;
+    }
+
+    const referencedParameter = (parametersValue as Record<string, unknown>)[refName];
+    if (!referencedParameter || typeof referencedParameter !== 'object') {
+      return null;
+    }
+
+    return referencedParameter as Record<string, unknown>;
+  }
+
+  function mergePathItemParameters(
+    spec: OpenApiSpec,
+    pathItem: Record<string, unknown>,
+    operation: Record<string, unknown>
+  ): Record<string, unknown> {
+    const mergedOperation: Record<string, unknown> = { ...operation };
+
+    const pathParameters = Array.isArray(pathItem.parameters)
+      ? pathItem.parameters
+          .map((value) => resolveParameterRef(spec, value))
+          .filter((value): value is Record<string, unknown> => Boolean(value))
+      : [];
+
+    const operationParameters = Array.isArray(operation.parameters)
+      ? operation.parameters
+          .map((value) => resolveParameterRef(spec, value))
+          .filter((value): value is Record<string, unknown> => Boolean(value))
+      : [];
+
+    if (pathParameters.length === 0 && operationParameters.length === 0) {
+      return mergedOperation;
+    }
+
+    const operationParameterKeys = new Set(
+      operationParameters.map((value) => {
+        const parameter = value as Record<string, unknown>;
+        return `${String(parameter.in ?? '')}::${String(parameter.name ?? '')}`;
+      })
+    );
+
+    const mergedParameters = [
+      ...pathParameters.filter((value) => {
+        const parameter = value as Record<string, unknown>;
+        const key = `${String(parameter.in ?? '')}::${String(parameter.name ?? '')}`;
+        return !operationParameterKeys.has(key);
+      }),
+      ...operationParameters
+    ];
+
+    mergedOperation.parameters = mergedParameters;
+    return mergedOperation;
+  }
+
   function collectEndpoints(file: string, spec: OpenApiSpec | null): EndpointItem[] {
     if (!spec) {
       return [];
@@ -57,7 +134,7 @@
           continue;
         }
 
-        const operation = operationValue as Record<string, unknown>;
+        const operation = mergePathItemParameters(spec, pathItem, operationValue as Record<string, unknown>);
         const summaryValue = operation.summary;
 
         endpoints.push({
