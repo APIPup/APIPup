@@ -1,5 +1,7 @@
 # APIPup
 
+⚠️ **This project is currently in early development (Alpha) and is not suitable for production use.**
+
 **Readme in other languages:** [English](README.md) | [中文](README.zh.md) | [日本語](README.ja.md) | [Français](README.fr.md) | [Deutsch](README.de.md)
 
 A high-performance, cross-platform API testing tool with native desktop performance.
