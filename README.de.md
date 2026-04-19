@@ -1,5 +1,7 @@
 # APIPup
 
+⚠️ **Dieses Projekt befindet sich derzeit in der frühen Entwicklungsphase (Alpha) und ist nicht für den produktiven Einsatz geeignet。**
+
 Ein hochleistungsfähiges, plattformübergreifendes API-Test-Tool mit nativer Desktop-Leistung.
 
 Erstellt mit **Tauri** + **Rust** + **SvelteKit** für ein schnelles, leichtes und reaktionsschnelles Erlebnis.

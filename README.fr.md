@@ -1,5 +1,7 @@
 # APIPup
 
+⚠️ **Ce projet est actuellement en développement précoce (Alpha) et n'est pas adapté à un environnement de production.**
+
 Un outil de test API multiplateforme haute performance avec des performances natives de bureau.
 
 Construit avec **Tauri** + **Rust** + **SvelteKit** pour une expérience rapide, légère et réactive.
